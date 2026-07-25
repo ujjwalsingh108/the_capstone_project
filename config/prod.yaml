@@ -1,0 +1,15 @@
+app:
+  name: Intelligent Price Prediction Agent
+  env: production
+  log_level: INFO
+paths:
+  raw_data: data/01-raw
+  preprocessed_data: data/02-preprocessed
+  features_data: data/03-features
+  predictions_data: data/04-predictions
+rag:
+  top_k: 8
+  collection: price_agent_documents
+models:
+  base_model: production-finetuned-model
+  embedding_model: text-embedding-3-small

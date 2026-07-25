@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.build/
+dist/
+build/
+*.egg-info/
+.venv/
+venv/
+ENV/
+.env
+.env.*
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Application artifacts
+artifacts/
+checkpoints/
+runs/
+models/
+logs/
+cache/
+
+# Data generated locally
+data/raw/
+data/processed/
+data/interim/
