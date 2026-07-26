@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, Self
+from typing import Any, Optional
 
 from datasets import Dataset, DatasetDict, load_dataset
 from pydantic import BaseModel
@@ -20,6 +20,7 @@ class Item(BaseModel):
     summary: Optional[str] = None
     prompt: Optional[str] = None
     id: Optional[int] = None
+    parent_asin: Optional[str] = None
 
     def make_prompt(self, text: str) -> None:
         self.prompt = f"{QUESTION}\n\n{text}\n\n{PREFIX}{round(self.price)}.00"
@@ -33,7 +34,7 @@ class Item(BaseModel):
         return f"<{self.title} = ${self.price}>"
 
     @staticmethod
-    def push_to_hub(dataset_name: str, train: list[Self], val: list[Self], test: list[Self]) -> None:
+    def push_to_hub(dataset_name: str, train: list[Item], val: list[Item], test: list[Item]) -> None:
         """Push Item lists to Hugging Face Hub."""
         DatasetDict(
             {
@@ -44,9 +45,9 @@ class Item(BaseModel):
         ).push_to_hub(dataset_name)
 
     @classmethod
-    def from_hub(cls, dataset_name: str) -> tuple[list[Self], list[Self], list[Self]]:
+    def from_hub(cls, dataset_name: str) -> tuple[list[Item], list[Item], list[Item]]:
         """Load from Hugging Face Hub and reconstruct Item objects."""
-        ds = load_dataset(dataset_name)
+        ds: Any = load_dataset(dataset_name)
         return (
             [cls.model_validate(row) for row in ds["train"]],
             [cls.model_validate(row) for row in ds["validation"]],
