@@ -1,3 +1,6 @@
+# Allow to read in data from hugging face and turn into an item object.
+# It does that by removing some whitespace, max characters.
+
 from __future__ import annotations
 
 import json

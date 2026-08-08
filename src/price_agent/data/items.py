@@ -1,3 +1,5 @@
+# Items file is for converting data into json format.
+
 from __future__ import annotations
 
 from typing import Any, Optional

@@ -36,3 +36,5 @@ cache/
 data/raw/
 data/processed/
 data/interim/
+data/01-raw/**/*.parquet
+data/01-raw/**/.cache/
