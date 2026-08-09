@@ -79,7 +79,10 @@ class ItemLoader:
             raise ValueError(f"No parquet files found in '{data_path}'.")
 
         data_files = [str(path) for path in parquet_files]
-        self.dataset = load_dataset("parquet", data_files=data_files, split="train")
+        loaded_dataset = load_dataset("parquet", data_files=data_files, split="train")
+        if not isinstance(loaded_dataset, Dataset):
+            raise TypeError("Expected a map-style Dataset when loading local parquet files.")
+        self.dataset = loaded_dataset
         results = self.load_in_parallel(workers)
         finish = datetime.now()
         print(

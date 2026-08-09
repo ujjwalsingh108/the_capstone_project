@@ -36,15 +36,29 @@ class Item(BaseModel):
         return f"<{self.title} = ${self.price}>"
 
     @staticmethod
-    def push_to_hub(dataset_name: str, train: list[Item], val: list[Item], test: list[Item]) -> None:
+    def push_to_hub(
+        dataset_name: str,
+        train: list[Item],
+        val: list[Item],
+        test: list[Item],
+        max_shard_size: str = "200MB",
+    ) -> None:
         """Push Item lists to Hugging Face Hub."""
-        DatasetDict(
+        dataset_dict = DatasetDict(
             {
                 "train": Dataset.from_list([item.model_dump() for item in train]),
                 "validation": Dataset.from_list([item.model_dump() for item in val]),
                 "test": Dataset.from_list([item.model_dump() for item in test]),
             }
-        ).push_to_hub(dataset_name)
+        )
+
+        print(
+            f"Uploading {dataset_name} with train={len(train):,}, validation={len(val):,}, test={len(test):,} "
+            f"using max_shard_size={max_shard_size}",
+            flush=True,
+        )
+        dataset_dict.push_to_hub(dataset_name, max_shard_size=max_shard_size)
+        print(f"Completed upload for {dataset_name}", flush=True)
 
     @classmethod
     def from_hub(cls, dataset_name: str) -> tuple[list[Item], list[Item], list[Item]]:
