@@ -17,6 +17,7 @@ torch
 transformers
 tqdm
 openai
+groq
 gradio
 langchain
 langchain-core
@@ -46,3 +47,4 @@ wandb
 jupyterlab
 huggingface_hub>=1.27.0
 hf_transfer
+litellm
