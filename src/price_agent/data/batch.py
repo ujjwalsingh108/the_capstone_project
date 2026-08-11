@@ -26,6 +26,7 @@ PREPROCESSED_ROOT = PROJECT_ROOT / "data" / "02-preprocessed"
 BATCHES_FOLDER = "batches"
 OUTPUT_FOLDER = "output"
 state = PREPROCESSED_ROOT / "batches.pkl"
+API_TIMEOUT_SECONDS = 30.0
 
 SYSTEM_PROMPT = """Create a concise description of a product. Respond only in this format. Do not include part numbers.
 Title: Rewritten short precise title
@@ -81,12 +82,16 @@ class Batch:
                 f.write("\n")
 
     def send_file(self) -> None:
+        if self.file_id is not None:
+            return
         batch_file = self.batches_dir / self.filename
         with batch_file.open("rb") as f:
             response = groq.files.create(file=f, purpose="batch")
         self.file_id = response.id
 
     def submit_batch(self) -> None:
+        if self.batch_id is not None:
+            return
         if self.file_id is None:
             raise ValueError("file_id is missing. Run send_file() before submit_batch().")
         response = groq.batches.create(
@@ -99,7 +104,7 @@ class Batch:
     def is_ready(self) -> bool:
         if self.batch_id is None:
             raise ValueError("batch_id is missing. Run submit_batch() before is_ready().")
-        response = groq.batches.retrieve(self.batch_id)
+        response = groq.batches.retrieve(self.batch_id, timeout=API_TIMEOUT_SECONDS)
         status = response.status
         if status == "completed":
             self.output_file_id = response.output_file_id
@@ -109,12 +114,12 @@ class Batch:
         if self.output_file_id is None:
             raise ValueError("output_file_id is missing. Wait for batch completion before fetch_output().")
         output_file = str(self.output_dir / self.filename)
-        response = groq.files.content(self.output_file_id)
+        response = groq.files.content(self.output_file_id, timeout=API_TIMEOUT_SECONDS)
         response.write_to_file(output_file)
 
     def apply_output(self) -> None:
-        output_file = str(self.output_dir / self.filename)
-        with open(output_file, "r", encoding="utf-8") as f:
+        output_file = self.output_dir / self.filename
+        with output_file.open("r", encoding="utf-8") as f:
             for line in f:
                 json_line = json.loads(line)
                 item_id = int(json_line["custom_id"])
@@ -133,21 +138,55 @@ class Batch:
 
     @classmethod
     def run(cls) -> None:
+        submitted = 0
+        skipped = 0
         for batch in tqdm(cls.batches):
+            output_file = batch.output_dir / batch.filename
+            if batch.batch_id is not None or output_file.exists():
+                skipped += 1
+                continue
             batch.make_file()
             batch.send_file()
             batch.submit_batch()
-        print(f"Submitted {len(cls.batches)} batches")
+            submitted += 1
+        if cls.batches:
+            cls.save()
+        print(f"Submitted {submitted} batches, skipped {skipped} already-submitted batches")
 
     @classmethod
     def fetch(cls) -> None:
+        fetched = 0
+        pending = 0
+        failed = 0
         for batch in tqdm(cls.batches):
-            if not batch.done:
+            if batch.done:
+                continue
+
+            # If output file already exists from an earlier run, apply it directly.
+            output_file = batch.output_dir / batch.filename
+            if output_file.exists():
+                batch.apply_output()
+                fetched += 1
+                continue
+
+            try:
                 if batch.is_ready():
                     batch.fetch_output()
                     batch.apply_output()
+                    fetched += 1
+                else:
+                    pending += 1
+            except Exception as exc:
+                failed += 1
+                print(f"Failed to process {batch.filename}: {exc}")
+
+        if cls.batches:
+            cls.save()
         finished = [batch for batch in cls.batches if batch.done]
-        print(f"Finished {len(finished)} of {len(cls.batches)} batches")
+        print(
+            f"Finished {len(finished)} of {len(cls.batches)} batches "
+            f"(fetched now: {fetched}, pending: {pending}, failed: {failed})"
+        )
 
     @classmethod
     def save(cls) -> None:
