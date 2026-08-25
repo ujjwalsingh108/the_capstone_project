@@ -49,3 +49,8 @@ huggingface_hub>=1.27.0
 hf_transfer
 litellm
 xgboost
+google-cloud-storage 
+google-cloud-aiplatform
+vertexai
+bitsandbytes
+peft
