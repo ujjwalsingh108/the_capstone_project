@@ -1,18 +1,16 @@
-# Items file is for converting data into json format.
-
-from __future__ import annotations
-
-from typing import Any, Optional
-
-from datasets import Dataset, DatasetDict, load_dataset
 from pydantic import BaseModel
+from datasets import Dataset, DatasetDict, load_dataset
+from typing import Optional, Self
+
 
 PREFIX = "Price is $"
 QUESTION = "What does this cost to the nearest dollar?"
 
 
 class Item(BaseModel):
-    """An Item is a data-point of a product with a price."""
+    """
+    An Item is a data-point of a Product with a Price
+    """
 
     title: str
     category: str
@@ -21,51 +19,71 @@ class Item(BaseModel):
     weight: Optional[float] = None
     summary: Optional[str] = None
     prompt: Optional[str] = None
+    completion: Optional[str] = None
     id: Optional[int] = None
-    parent_asin: Optional[str] = None
 
-    def make_prompt(self, text: str) -> None:
+    def make_prompt(self, text: str):
         self.prompt = f"{QUESTION}\n\n{text}\n\n{PREFIX}{round(self.price)}.00"
 
     def test_prompt(self) -> str:
-        if self.prompt is None:
-            raise ValueError("Prompt has not been created. Call make_prompt first.")
         return self.prompt.split(PREFIX)[0] + PREFIX
 
     def __repr__(self) -> str:
         return f"<{self.title} = ${self.price}>"
 
     @staticmethod
-    def push_to_hub(
-        dataset_name: str,
-        train: list[Item],
-        val: list[Item],
-        test: list[Item],
-        max_shard_size: str = "200MB",
-    ) -> None:
-        """Push Item lists to Hugging Face Hub."""
-        dataset_dict = DatasetDict(
+    def push_to_hub(dataset_name: str, train: list[Self], val: list[Self], test: list[Self]):
+        """Push Item lists to HuggingFace Hub"""
+        DatasetDict(
             {
                 "train": Dataset.from_list([item.model_dump() for item in train]),
                 "validation": Dataset.from_list([item.model_dump() for item in val]),
                 "test": Dataset.from_list([item.model_dump() for item in test]),
             }
-        )
-
-        print(
-            f"Uploading {dataset_name} with train={len(train):,}, validation={len(val):,}, test={len(test):,} "
-            f"using max_shard_size={max_shard_size}",
-            flush=True,
-        )
-        dataset_dict.push_to_hub(dataset_name, max_shard_size=max_shard_size)
-        print(f"Completed upload for {dataset_name}", flush=True)
+        ).push_to_hub(dataset_name)
 
     @classmethod
-    def from_hub(cls, dataset_name: str) -> tuple[list[Item], list[Item], list[Item]]:
-        """Load from Hugging Face Hub and reconstruct Item objects."""
-        ds: Any = load_dataset(dataset_name)
+    def from_hub(cls, dataset_name: str) -> tuple[list[Self], list[Self], list[Self]]:
+        """Load from HuggingFace Hub and reconstruct Items"""
+        ds = load_dataset(dataset_name)
         return (
             [cls.model_validate(row) for row in ds["train"]],
             [cls.model_validate(row) for row in ds["validation"]],
             [cls.model_validate(row) for row in ds["test"]],
         )
+
+    def count_tokens(self, tokenizer):
+        """Count tokens in the summary"""
+        return len(tokenizer.encode(self.summary, add_special_tokens=False))
+
+    def make_prompts(self, tokenizer, max_tokens, do_round):
+        """Make prompts and completions"""
+        tokens = tokenizer.encode(self.summary, add_special_tokens=False)
+        if len(tokens) > max_tokens:
+            summary = tokenizer.decode(tokens[:max_tokens]).rstrip()
+        else:
+            summary = self.summary
+        self.prompt = f"{QUESTION}\n\n{summary}\n\n{PREFIX}"
+        self.completion = f"{round(self.price)}.00" if do_round else str(self.price)
+
+    def count_prompt_tokens(self, tokenizer):
+        """Count tokens in the prompt"""
+        full = self.prompt + self.completion
+        tokens = tokenizer.encode(full, add_special_tokens=False)
+        return len(tokens)
+
+    def to_datapoint(self) -> dict:
+        return {"prompt": self.prompt, "completion": self.completion}
+
+    @staticmethod
+    def push_prompts_to_hub(
+        dataset_name: str, train: list[Self], val: list[Self], test: list[Self]
+    ):
+        """Push Item lists to HuggingFace Hub in prompt-completion format for SFT training."""
+        DatasetDict(
+            {
+                "train": Dataset.from_list([item.to_datapoint() for item in train]),
+                "val": Dataset.from_list([item.to_datapoint() for item in val]),
+                "test": Dataset.from_list([item.to_datapoint() for item in test]),
+            }
+        ).push_to_hub(dataset_name)
